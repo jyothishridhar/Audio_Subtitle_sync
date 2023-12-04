@@ -1,7 +1,5 @@
 opencv-python-headless==4.8.1.78
 pytesseract==0.3.8
-#tesseract-ocr==5.3.1.20230401
-re==2.2.1
 librosa==0.8.1
 numpy==1.21.1
 tensorflow==2.5.0
