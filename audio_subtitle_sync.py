@@ -15,7 +15,9 @@ import tempfile
 import os
 import base64
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Users\jyothi.s\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
+# Set Tesseract path using environment variable
+pytesseract.pytesseract.tesseract_cmd = os.environ.get('TESSERACT_CMD', 'tesseract')
+
 
 # Function to download a file from a URL
 def download_file(url, dest_path):
