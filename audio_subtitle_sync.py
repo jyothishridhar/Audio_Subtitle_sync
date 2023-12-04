@@ -1,4 +1,5 @@
 import cv2
+pytesseract.pytesseract.tesseract_cmd = r"C:\Users\jyothi.s\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
 import pytesseract
 import re
 import librosa
