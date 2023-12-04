@@ -1,5 +1,4 @@
 import cv2
-pytesseract.pytesseract.tesseract_cmd = r"C:\Users\jyothi.s\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
 import pytesseract
 import re
 import librosa
@@ -15,6 +14,8 @@ from io import BytesIO
 import tempfile
 import os
 import base64
+
+pytesseract.pytesseract.tesseract_cmd = r"C:\Users\jyothi.s\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
 
 # Function to download a file from a URL
 def download_file(url, dest_path):
