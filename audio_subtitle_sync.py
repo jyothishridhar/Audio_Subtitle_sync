@@ -116,8 +116,8 @@ def run_combined_process(video_path, audio_file):
 st.title("Audio and Subtitle Processing Demo")
 
 # URLs for the video and audio
-video_url_sync = "https://github.com/jyothishridhar/Audio_Subtitle_sync/raw/main/distorted.avi"
-audio_url_sync = "https://github.com/jyothishridhar/Audio_Subtitle_sync/raw/main/distorted.wav"
+video_url_sync = "https://github.com/jyothishridhar/Audio_Subtitle_sync/raw/master/referance_video.mp4"
+audio_url_sync = "https://github.com/jyothishridhar/Audio_Subtitle_sync/raw/master/referance_audio.wav.wav"
 
 # Temporary download paths
 video_path_sync = tempfile.NamedTemporaryFile(delete=False, suffix=".avi").name
