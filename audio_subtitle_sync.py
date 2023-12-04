@@ -16,8 +16,8 @@ import os
 import base64
 
 # Set Tesseract path using environment variable
-pytesseract.pytesseract.tesseract_cmd = os.environ.get('TESSERACT_CMD', 'tesseract')
-print(os.environ.get('TESSERACT_CMD', 'tesseract'))
+tesseract_cmd = os.environ.get('TESSERACT_CMD', 'tesseract')
+st.write(f'Tesseract Path: {tesseract_cmd}')
 
 # Function to download a file from a URL
 def download_file(url, dest_path):
