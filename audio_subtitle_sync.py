@@ -8,137 +8,141 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 import pandas as pd
+import streamlit as st
+import requests
+from io import BytesIO
+import tempfile
+import os
+import base64
 
-# First code: Extract subtitles from video
-video_path = r"C:/OTT_PROJECT/audio_subtitle_synchronization/referance_video.mp4"
-cap = cv2.VideoCapture(video_path)
+# Function to download a file from a URL
+def download_file(url, dest_path):
+    response = requests.get(url)
+    with open(dest_path, 'wb') as file:
+        file.write(response.content)
 
-subtitles = []  # List to store the extracted subtitles
-frame_number = 0  # Variable to track the frame number
-millisecond_per_frame = 40  # Assuming each frame is 40 milliseconds
-second = 0  # Variable to track the second
+# Function for subtitle extraction
+def extract_subtitles(video_path):
+    cap = cv2.VideoCapture(video_path)
+    subtitles = []
+    frame_number = 0
+    millisecond_per_frame = 40
+    second = 0
 
-while cap.isOpened():
-    frame_number += 1  # Increment the frame number at the beginning of the loop
+    while cap.isOpened():
+        frame_number += 1
+        ret, frame = cap.read()
 
-    ret, frame = cap.read()
+        if not ret:
+            break
 
-    if not ret:
-        break
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        subtitle_text = pytesseract.image_to_string(gray)
 
-    # Convert the frame to grayscale
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if subtitle_text:
+            start_timestamp = (frame_number - 1) * millisecond_per_frame
+            end_timestamp = frame_number * millisecond_per_frame
 
-    # Accumulate the subtitles for each frame
-    subtitle_text = pytesseract.image_to_string(gray)
+            subtitle = {
+                'frame_number': frame_number,
+                'start_time': start_timestamp,
+                'end_time': end_timestamp,
+                'text': subtitle_text
+            }
+
+            subtitles.append(subtitle)
+
+            if frame_number % 20 == 0:
+                second += 1
+                print(f"Subtitle for {second} seconds: {subtitle_text}")
+                subtitle_text = ""
+
+    srt_file = "subtitles_sync.srt"
+    with open(srt_file, "w") as file:
+        for subtitle in subtitles:
+            timestamp_line = f"{subtitle['frame_number']}\n{subtitle['start_time']:0>3} --> {subtitle['end_time']:0>3}\n"
+            file.write(timestamp_line + subtitle['text'] + "\n\n")
+
+    return srt_file, subtitles
+
+# Function for audio processing
+def process_audio(audio_file):
+    audio, sr = librosa.load(audio_file, sr=None)
+    mfcc_features = librosa.feature.mfcc(y=audio, sr=sr)
+    mfcc_features = (mfcc_features - np.mean(mfcc_features)) / np.std(mfcc_features)
+    mfcc_features = np.swapaxes(mfcc_features, 0, 1)
+    labels = np.array([1] * mfcc_features.shape[0])
+
+    split_ratio = 0.8
+    split_index = int(split_ratio * mfcc_features.shape[0])
+    train_features = mfcc_features[:split_index]
+    train_labels = labels[:split_index]
+    val_features = mfcc_features[split_index:]
+    val_labels = labels[split_index:]
+
+    model = Sequential()
+    model.add(Dense(64, activation='relu', input_shape=train_features.shape[1:]))
+    model.add(Dropout(0.5))
+    model.add(Dense(1, activation='sigmoid'))
+
+    model.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=0.001), metrics=['accuracy'])
+    model.fit(train_features, train_labels, batch_size=32, epochs=10, validation_data=(val_features, val_labels))
+
+    voice_probabilities = model.predict(mfcc_features)
+    return voice_probabilities
+
+# Function to run the combined process
+def run_combined_process(video_path, audio_file):
+    srt_file, subtitles = extract_subtitles(video_path)
+    voice_probabilities = process_audio(audio_file)
+
+    subtitle_data = pd.DataFrame(subtitles)
+    original_frame_numbers = subtitle_data['frame_number']
+
+    for i, subtitle in enumerate(subtitles):
+        if i < len(original_frame_numbers):
+            original_subtitle = subtitle_data.loc[subtitle_data['frame_number'] == original_frame_numbers[i]].iloc[0]
+            print("Original Subtitle:")
+            print(f"Frame number: {original_subtitle['frame_number']}, Start time: {original_subtitle['start_time']}, End time: {original_subtitle['end_time']}, Text: {original_subtitle['text']}")
+            print()
+
+    result_df = pd.DataFrame({'Frame Number': subtitle_data['frame_number'], 'Start Time': subtitle_data['start_time'],
+                              'End Time': subtitle_data['end_time'], 'Text': subtitle_data['text'],
+                              'Voice Probabilities': voice_probabilities.flatten()})
     
-    if subtitle_text:
-        # Format the subtitle timestamps in SRT format
-        start_timestamp = (frame_number - 1) * millisecond_per_frame
-        end_timestamp = frame_number * millisecond_per_frame
+    return result_df
 
-        # Create a dictionary for the subtitle
-        subtitle = {
-            'frame_number': frame_number,
-            'start_time': start_timestamp,
-            'end_time': end_timestamp,
-            'text': subtitle_text
-        }
+# Streamlit app code
+st.title("Audio and Subtitle Processing Demo")
 
-        # Add the subtitle dictionary to the subtitles list
-        subtitles.append(subtitle)
+# URLs for the video and audio
+video_url_sync = "https://github.com/jyothishridhar/Audio_Subtitle_sync/raw/main/distorted.avi"
+audio_url_sync = "https://github.com/jyothishridhar/Audio_Subtitle_sync/raw/main/distorted.wav"
 
-        # Check if 800 milliseconds have passed
-        if frame_number % 20 == 0:
-            second += 1
-            print(f"Subtitle for {second} seconds: {subtitle_text}")
-            subtitle_text = ""  # Reset subtitle_text for the next 800 milliseconds
+# Temporary download paths
+video_path_sync = tempfile.NamedTemporaryFile(delete=False, suffix=".avi").name
+audio_path_sync = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
 
+# Download video and audio
+download_file(video_url_sync, video_path_sync)
+download_file(audio_url_sync, audio_path_sync)
 
-# Save the subtitles to an SRT file
-srt_file = "C:/OTT_PROJECT/audio_subtitle_synchronization/subtitles_sync.srt"
-with open(srt_file, "w") as file:
-    for subtitle in subtitles:
-        timestamp_line = f"{subtitle['frame_number']}\n{subtitle['start_time']:0>3} --> {subtitle['end_time']:0>3}\n"
-        file.write(timestamp_line + subtitle['text'] + "\n\n")
+# Run the combined process
+result_df_sync = run_combined_process(video_path_sync, audio_path_sync)
 
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout
-from tensorflow.keras.optimizers import Adam
-import pandas as pd
+# Display the result on the app
+st.success("Process completed! Result:")
+st.dataframe(result_df_sync)
 
-# Load the audio file
-audio_file = r"C:/OTT_PROJECT/audio_subtitle_synchronization/referance_video.wav"
-audio, sr = librosa.load(audio_file, sr=None)
+# Provide download links for the video and report
+st.markdown(f"### Download Video")
+st.markdown(f"[Download Video]({video_url_sync})")
 
-# Extract MFCC features from the audio
-mfcc_features = librosa.feature.mfcc(y=audio, sr=sr)
-mfcc_features = (mfcc_features - np.mean(mfcc_features)) / np.std(mfcc_features)
-mfcc_features = np.swapaxes(mfcc_features, 0, 1)
+st.markdown(f"### Download Report")
+csv_report_sync = result_df_sync.to_csv(index=False)
+b64_sync = base64.b64encode(csv_report_sync.encode()).decode()
+st.markdown(f"[Download Report](data:text/csv;base64,{b64_sync})")
 
-# Prepare the labels
-labels = np.array([1] * mfcc_features.shape[0])
-
-# Split the data into training and validation sets
-split_ratio = 0.8
-split_index = int(split_ratio * mfcc_features.shape[0])
-train_features = mfcc_features[:split_index]
-train_labels = labels[:split_index]
-val_features = mfcc_features[split_index:]
-val_labels = labels[split_index:]
-
-# Define the model architecture
-model = Sequential()
-model.add(Dense(64, activation='relu', input_shape=train_features.shape[1:]))
-model.add(Dropout(0.5))
-model.add(Dense(1, activation='sigmoid'))
-
-# Compile and train the model
-model.compile(loss='binary_crossentropy', optimizer=Adam(learning_rate=0.001), metrics=['accuracy'])
-model.fit(train_features, train_labels, batch_size=32, epochs=10, validation_data=(val_features, val_labels))
-
-# Predict voice probabilities for all frames
-voice_probabilities = model.predict(mfcc_features)
-print('voice_probabilities:', voice_probabilities)
-
-# Load the extracted subtitles from the SRT file
-subtitles = []
-with open(srt_file, "r") as file:
-    subtitle_lines = file.read().split("\n\n")
-    for line in subtitle_lines:
-        lines = line.split("\n")
-        if len(lines) >= 3:
-            if " --> " in lines[1]:
-                start_time_str, end_time_str = lines[1].split(" --> ")
-                start_time = float(start_time_str.replace(",", ".").replace(":", "."))
-                end_time = float(end_time_str.replace(",", ".").replace(":", "."))
-                text = lines[2]
-                frame_number = int(lines[0])  # Get the frame number from the SRT file
-                subtitle = {
-                    'frame_number': frame_number,
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'text': text
-                }
-                subtitles.append(subtitle)
-
-# Create a DataFrame from the subtitles list
-subtitle_data = pd.DataFrame(subtitles)
-
-# Get the frame numbers corresponding to the original subtitles
-original_frame_numbers = subtitle_data['frame_number']
-
-# Print only the original subtitles
-for i, subtitle in enumerate(subtitles):
-    if i < len(original_frame_numbers):
-        original_subtitle = subtitle_data.loc[subtitle_data['frame_number'] == original_frame_numbers[i]].iloc[0]
-        print("Original Subtitle:")
-        print(f"Frame number: {original_subtitle['frame_number']}, Start time: {original_subtitle['start_time']}, End time: {original_subtitle['end_time']}, Text: {original_subtitle['text']}")
-        print()
-
-# Specify the file path for the Excel report
-excel_file = 'C:/OTT_PROJECT/audio_subtitle_synchronization/report_sync_reference.xlsx'
-
-# Save the DataFrame to an Excel file
-subtitle_data.to_excel(excel_file, index=False)
+# Clean up temporary files
+os.unlink(video_path_sync)
+os.unlink(audio_path_sync)
