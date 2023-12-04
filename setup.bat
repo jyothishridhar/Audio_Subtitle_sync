@@ -1,5 +1,9 @@
 @echo off
 
+rem Install dependencies
+pip install -r requirements.txt
+
+rem Configure Streamlit
 echo [general]> "%userprofile%\.streamlit\credentials.toml"
 echo email = "jyothishridhar0625@gmail.com">> "%userprofile%\.streamlit\credentials.toml"
 

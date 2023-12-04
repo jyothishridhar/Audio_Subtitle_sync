@@ -1,2 +1,1 @@
-web: streamlit run audio_subtitle_sync.py
-
+web: setup.bat && streamlit run audio_subtitle_sync.py
