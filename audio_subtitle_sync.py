@@ -15,8 +15,6 @@ import tempfile
 import os
 import base64
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Users\jyothi.s\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
-
 # Function to download a file from a URL
 def download_file(url, dest_path):
     response = requests.get(url)
@@ -39,7 +37,9 @@ def extract_subtitles(video_path):
             break
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        subtitle_text = pytesseract.image_to_string(gray)
+        
+        # Use tesseract_cmd argument
+        subtitle_text = pytesseract.image_to_string(gray, config='--tessdata-dir "./tessdata"')
 
         if subtitle_text:
             start_timestamp = (frame_number - 1) * millisecond_per_frame
